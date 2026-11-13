@@ -79,8 +79,15 @@ iouring/
     task.h                  minimal Task<T> coroutine type
     reactor.h               owns one io_uring, runs the submit/reap loop
     files.h                 RandomAccessFiles: open + register, read(), flush()
-  src/                      reactor.cc, files.cc
+    pool.h                  M4 design A: ShardedPool, one SINGLE_ISSUER ring per thread
+    ring_server.h           M4 design B: RingServer, one ring shared by blocking callers via eventfd
+  include/optimized/        upio::optimized: Reactor with post(), RandomAccessFiles, and a RingServer
+                            whose callers wait on a futex word woken via IORING_OP_FUTEX_WAKE
+  src/optimized/            reactor.cc, files.cc, ring_server.cc
+  src/                      reactor.cc, files.cc, pool.cc, ring_server.cc
   bench/
+    m4_compare.cc           design A vs design B vs pread threads at equal concurrency
+    m4_compare_optimized.cc upio::RingServer vs upio::optimized::RingServer vs pread threads
     gen.cc                  write N files of 4 KiB blocks, each filled from hash(file, block)
     bench.cc                one binary, --engine=pread|mmap|uring, prints ops/s and p50/p90/p99.9/p99.99/max
     nop.cc                  NOP round trips: measures ring and wrapper overhead alone
@@ -147,9 +154,13 @@ and let the benchmark pick:
 Expect A to win on throughput and B to show the handoff cost in p50. That is a
 guess until M5 measures it.
 
-**M5. Benchmark (bench/).** Mirror `uring_bench`. Generate 16 files of 32 MiB
-(512 MiB, which fits the free disk). Every block is filled from
-`hash(file, block)` so every read is verified, like `verify_buf` in Rust.
+**M5. Benchmark (bench/).** Mirror `uring_bench`. `gen` writes 4 files of 16 MiB
+(64 MiB; free disk had fallen to about 220 MiB by M5). Every block is filled from
+`pattern(global block, word)` so every read can be verified (`--verify`), like
+`verify_buf` in Rust. `bench` prints the dataset's cached fraction before and
+after each run (from `mincore`), reads per `io_uring_enter`, and CPU per read,
+so each row says which regime it measured. `bench --smoke` and `nop --ops 20000`
+are the ctests.
 
 Matrix, with a fixed 30 s duration:
 
