@@ -1,6 +1,6 @@
 #pragma once
 
-// Optimized copy of upio/ring_server.h. See DESIGN.md (M4) for the measurements behind it.
+// Optimized copy of upio/ring_server.h. See README.md (Results) for the measurements behind it.
 
 #include <atomic>
 #include <cstddef>
